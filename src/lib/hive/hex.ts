@@ -1,6 +1,7 @@
 // Hex coordinate utilities using axial coordinates (q, r)
 
-import { HexCoord } from './types';
+import type { HexCoord } from './types';
+export type { HexCoord } from './types';
 
 // The 6 neighbor directions in axial coordinates
 export const HEX_DIRECTIONS: HexCoord[] = [
