@@ -14,6 +14,8 @@ interface ChatMessage {
   timestamp: number;
 }
 
+const sb = supabase as any;
+
 const GamePage: React.FC = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const [searchParams] = useSearchParams();
@@ -27,16 +29,11 @@ const GamePage: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Load or join game
   useEffect(() => {
     if (!gameId) return;
 
     const loadGame = async () => {
-      const { data, error } = await supabase
-        .from('games')
-        .select('*')
-        .eq('id', gameId)
-        .single();
+      const { data, error } = await sb.from('games').select('*').eq('id', gameId).single();
 
       if (error || !data) {
         toast.error('Game not found');
@@ -45,20 +42,18 @@ const GamePage: React.FC = () => {
       }
 
       if (color === 'black' && !data.black_player) {
-        // Join as black player
         const initialState = createInitialState(data.white_player, nickname);
-        const { error: updateError } = await supabase
+        const { error: updateError } = await sb
           .from('games')
           .update({
             black_player: nickname,
             status: 'playing',
-            game_state: initialState as any,
+            game_state: initialState,
           })
           .eq('id', gameId);
 
         if (updateError) {
           toast.error('Failed to join game');
-          console.error(updateError);
         } else {
           setGameState(initialState);
           setOpponentNickname(data.white_player);
@@ -66,17 +61,13 @@ const GamePage: React.FC = () => {
         }
       } else if (color === 'white') {
         if (data.game_state) {
-          setGameState(data.game_state as unknown as GameState);
+          setGameState(data.game_state as GameState);
           setOpponentNickname(data.black_player || 'Waiting...');
           setJoined(!!data.black_player);
-        } else {
-          setOpponentNickname('Waiting...');
-          setJoined(false);
         }
       } else {
-        // Reconnecting as black
         if (data.game_state) {
-          setGameState(data.game_state as unknown as GameState);
+          setGameState(data.game_state as GameState);
           setOpponentNickname(data.white_player);
           setJoined(true);
         }
@@ -87,34 +78,30 @@ const GamePage: React.FC = () => {
     loadGame();
   }, [gameId, color, nickname]);
 
-  // Subscribe to realtime changes
   useEffect(() => {
     if (!gameId) return;
 
     const channel = supabase
       .channel(`game-${gameId}`)
       .on(
-        'postgres_changes',
+        'postgres_changes' as any,
         { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` },
-        (payload) => {
-          const data = payload.new as any;
+        (payload: any) => {
+          const data = payload.new;
           if (data.game_state) {
-            setGameState(data.game_state as unknown as GameState);
+            setGameState(data.game_state as GameState);
           }
           if (data.black_player && color === 'white') {
             setOpponentNickname(data.black_player);
             setJoined(true);
           }
-          if (data.status === 'resigned') {
-            toast.info('Your opponent resigned!');
-          }
         }
       )
       .on(
-        'postgres_changes',
+        'postgres_changes' as any,
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `game_id=eq.${gameId}` },
-        (payload) => {
-          const msg = payload.new as any;
+        (payload: any) => {
+          const msg = payload.new;
           setChatMessages(prev => [...prev, {
             id: msg.id,
             sender: msg.sender,
@@ -130,15 +117,10 @@ const GamePage: React.FC = () => {
     };
   }, [gameId, color]);
 
-  // Load chat messages
   useEffect(() => {
     if (!gameId) return;
-    supabase
-      .from('messages')
-      .select('*')
-      .eq('game_id', gameId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
+    sb.from('messages').select('*').eq('game_id', gameId).order('created_at', { ascending: true })
+      .then(({ data }: any) => {
         if (data) {
           setChatMessages(data.map((m: any) => ({
             id: m.id,
@@ -153,23 +135,15 @@ const GamePage: React.FC = () => {
   const handleStateChange = useCallback(async (newState: GameState) => {
     setGameState(newState);
     if (!gameId) return;
-
-    await supabase
-      .from('games')
-      .update({
-        game_state: newState as any,
-        status: newState.status === 'playing' ? 'playing' : newState.status,
-      })
-      .eq('id', gameId);
+    await sb.from('games').update({
+      game_state: newState,
+      status: newState.status === 'playing' ? 'playing' : newState.status,
+    }).eq('id', gameId);
   }, [gameId]);
 
   const handleSendChat = useCallback(async (text: string) => {
     if (!gameId) return;
-    await supabase.from('messages').insert({
-      game_id: gameId,
-      sender: nickname,
-      text,
-    });
+    await sb.from('messages').insert({ game_id: gameId, sender: nickname, text });
   }, [gameId, nickname]);
 
   const handleResign = useCallback(async () => {
@@ -177,10 +151,7 @@ const GamePage: React.FC = () => {
     const winStatus = color === 'white' ? 'black_wins' : 'white_wins';
     const newState = { ...gameState, status: winStatus as GameState['status'] };
     setGameState(newState);
-    await supabase
-      .from('games')
-      .update({ game_state: newState as any, status: 'resigned' })
-      .eq('id', gameId);
+    await sb.from('games').update({ game_state: newState, status: 'resigned' }).eq('id', gameId);
   }, [gameId, gameState, color]);
 
   const handleCopyLink = () => {
@@ -202,7 +173,6 @@ const GamePage: React.FC = () => {
     );
   }
 
-  // Waiting for opponent
   if (!joined || !gameState) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -221,7 +191,7 @@ const GamePage: React.FC = () => {
             {copied ? '✅ Copied!' : '📋 Copy Invite Link'}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Your friend just needs to add their nickname to the URL and open it.
+            Your friend adds their nickname to the end of the URL and opens it.
           </p>
         </div>
       </div>

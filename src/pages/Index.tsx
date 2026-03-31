@@ -20,10 +20,9 @@ const Index: React.FC = () => {
     }
     setCreating(true);
     try {
-      // Generate a random game ID
       const gameId = Math.random().toString(36).substring(2, 8);
       
-      const { error } = await supabase.from('games').insert({
+      const { error } = await (supabase as any).from('games').insert({
         id: gameId,
         white_player: nickname.trim(),
         status: 'waiting',
@@ -55,7 +54,6 @@ const Index: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      {/* Hero */}
       <div className="text-center mb-8">
         <div className="text-6xl mb-4">🐝</div>
         <h1 className="text-4xl font-bold text-foreground tracking-tight">Hive</h1>
@@ -64,9 +62,7 @@ const Index: React.FC = () => {
         </p>
       </div>
 
-      {/* Card */}
       <div className="w-full max-w-sm space-y-6">
-        {/* Nickname */}
         <div>
           <label className="text-sm font-medium text-foreground block mb-1.5">Your nickname</label>
           <Input
@@ -77,7 +73,6 @@ const Index: React.FC = () => {
           />
         </div>
 
-        {/* Create */}
         <div className="space-y-2">
           <Button onClick={handleCreate} disabled={creating} className="w-full" size="lg">
             {creating ? 'Creating...' : '🎮 Create New Game'}
@@ -87,14 +82,12 @@ const Index: React.FC = () => {
           </p>
         </div>
 
-        {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-border" />
           <span className="text-xs text-muted-foreground">or</span>
           <div className="flex-1 h-px bg-border" />
         </div>
 
-        {/* Join */}
         <div className="space-y-2">
           <Input
             value={joinCode}
@@ -106,7 +99,6 @@ const Index: React.FC = () => {
           </Button>
         </div>
 
-        {/* Rules toggle */}
         <Button variant="ghost" onClick={() => setShowRules(!showRules)} className="w-full text-xs">
           {showRules ? 'Hide Rules' : '📖 How to Play'}
         </Button>
