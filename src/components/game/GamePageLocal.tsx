@@ -59,6 +59,21 @@ const GamePageLocal: React.FC<GamePageLocalProps> = ({
     setSelectedPieceType(prev => prev === type ? null : type);
   }, []);
 
+  const handleBoardPieceSelect = useCallback((coord: HexCoord) => {
+    setSelectedPieceType(null);
+    setSelectedBoardCoord(prev => prev && hexEqual(prev, coord) ? null : coord);
+  }, []);
+
+  const handleDragMove = useCallback((from: HexCoord, to: HexCoord) => {
+    const moves = getValidMoves(gameState, from);
+    if (moves.some(m => hexEqual(m, to))) {
+      const newState = movePiece(gameState, from, to);
+      onStateChange(newState);
+    }
+    setSelectedBoardCoord(null);
+    setSelectedPieceType(null);
+  }, [gameState, onStateChange]);
+
   const handleCellClick = useCallback((coord: HexCoord) => {
     if (!isMyTurn) return;
 
@@ -162,6 +177,8 @@ const GamePageLocal: React.FC<GamePageLocalProps> = ({
             validMoves={validMoves}
             validPlacements={validPlacements}
             onCellClick={handleCellClick}
+            onBoardPieceSelect={handleBoardPieceSelect}
+            onDragMove={handleDragMove}
           />
 
           {/* Player hand */}
