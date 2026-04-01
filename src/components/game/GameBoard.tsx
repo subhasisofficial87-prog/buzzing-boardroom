@@ -12,6 +12,8 @@ interface GameBoardProps {
   validMoves: HexCoord[];
   validPlacements: HexCoord[];
   onCellClick: (coord: HexCoord) => void;
+  onBoardPieceSelect: (coord: HexCoord) => void;
+  onDragMove: (from: HexCoord, to: HexCoord) => void;
 }
 
 const HEX_SIZE = 36;
