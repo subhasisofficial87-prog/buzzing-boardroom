@@ -177,6 +177,8 @@ const GamePageLocal: React.FC<GamePageLocalProps> = ({
             validMoves={validMoves}
             validPlacements={validPlacements}
             onCellClick={handleCellClick}
+            onBoardPieceSelect={handleBoardPieceSelect}
+            onDragMove={handleDragMove}
           />
 
           {/* Player hand */}
