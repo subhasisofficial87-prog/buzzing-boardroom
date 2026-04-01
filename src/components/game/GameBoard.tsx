@@ -121,28 +121,98 @@ const GameBoard: React.FC<GameBoardProps> = ({
   }, [state.board, validMoves, validPlacements, selectedBoardCoord]);
 
   const padding = HEX_SIZE * 3;
-  const width = bounds.maxX - bounds.minX + padding * 2;
-  const height = bounds.maxY - bounds.minY + padding * 2;
+  const svgWidth = Math.max(bounds.maxX - bounds.minX + padding * 2, 400);
+  const svgHeight = Math.max(bounds.maxY - bounds.minY + padding * 2, 400);
   const offsetX = -bounds.minX + padding;
   const offsetY = -bounds.minY + padding;
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const screenToSvg = useCallback((clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const svgPt = pt.matrixTransform(ctm.inverse());
+    return { x: svgPt.x, y: svgPt.y };
+  }, []);
+
+  // Find nearest hex cell to an SVG coordinate
+  const findHexAtSvg = useCallback((svgX: number, svgY: number): HexCoord | null => {
+    let closest: HexCoord | null = null;
+    let closestDist = Infinity;
+    for (const cell of cells) {
+      const { x, y } = hexToPixel(cell.coord, HEX_SIZE);
+      const px = x + offsetX;
+      const py = y + offsetY;
+      const dist = Math.hypot(svgX - px, svgY - py);
+      if (dist < HEX_SIZE && dist < closestDist) {
+        closestDist = dist;
+        closest = cell.coord;
+      }
+    }
+    return closest;
+  }, [cells, offsetX, offsetY]);
+
+  const handlePieceMouseDown = useCallback((e: React.MouseEvent, coord: HexCoord) => {
     if (e.button !== 0) return;
-    // Only start pan if clicking on SVG background
+    const top = getTopPiece(state.board, coord);
+    if (!top || top.color !== localColor || state.currentTurn !== localColor) return;
+    e.stopPropagation();
+    dragStartScreenRef.current = { x: e.clientX, y: e.clientY };
+    isDragThresholdMetRef.current = false;
+    // Select immediately for click fallback
+    onBoardPieceSelect(coord);
+    const svgPos = screenToSvg(e.clientX, e.clientY);
+    setDragState({ from: coord, cursorSvg: svgPos, piece: { type: top.type, color: top.color } });
+  }, [state.board, localColor, state.currentTurn, onBoardPieceSelect, screenToSvg]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0 || dragState) return;
     if ((e.target as HTMLElement).tagName === 'svg' || (e.target as HTMLElement).classList.contains('board-bg')) {
       setIsPanning(true);
       panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
     }
-  }, [pan]);
+  }, [pan, dragState]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (dragState) {
+      const dx = e.clientX - dragStartScreenRef.current.x;
+      const dy = e.clientY - dragStartScreenRef.current.y;
+      if (!isDragThresholdMetRef.current && Math.hypot(dx, dy) > 5) {
+        isDragThresholdMetRef.current = true;
+      }
+      if (isDragThresholdMetRef.current) {
+        const svgPos = screenToSvg(e.clientX, e.clientY);
+        setDragState(prev => prev ? { ...prev, cursorSvg: svgPos } : null);
+      }
+      return;
+    }
     if (!isPanning) return;
     const dx = e.clientX - panStartRef.current.x;
     const dy = e.clientY - panStartRef.current.y;
     setPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy });
-  }, [isPanning]);
+  }, [isPanning, dragState, screenToSvg]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    if (dragState) {
+      if (isDragThresholdMetRef.current) {
+        const svgPos = screenToSvg(e.clientX, e.clientY);
+        const targetCoord = findHexAtSvg(svgPos.x, svgPos.y);
+        if (targetCoord && validMoves.some(m => hexEqual(m, targetCoord))) {
+          onDragMove(dragState.from, targetCoord);
+        }
+      }
+      // If threshold not met, it was a click - selection already happened in mousedown
+      setDragState(null);
+      return;
+    }
+    setIsPanning(false);
+  }, [dragState, screenToSvg, findHexAtSvg, validMoves, onDragMove]);
+
+  const handleMouseLeave = useCallback(() => {
+    setDragState(null);
     setIsPanning(false);
   }, []);
 
@@ -155,6 +225,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
     return pts.join(' ');
   }, []);
 
+  const isDragging = dragState && isDragThresholdMetRef.current;
+
   return (
     <div
       ref={containerRef}
@@ -162,16 +234,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
     >
       <svg
+        ref={svgRef}
         width="100%"
         height="100%"
-        viewBox={`0 0 ${Math.max(width, 400)} ${Math.max(height, 400)}`}
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         className="board-bg"
         style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
       >
-        {/* Hex grid background pattern */}
         <defs>
           <filter id="glow">
             <feGaussianBlur stdDeviation="3" result="coloredBlur" />
@@ -179,6 +251,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
               <feMergeNode in="coloredBlur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
+          </filter>
+          <filter id="drag-shadow">
+            <feDropShadow dx="0" dy="3" stdDeviation="4" floodOpacity="0.4" />
           </filter>
         </defs>
 
@@ -189,6 +264,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           const top = getTopPiece(state.board, cell.coord);
           const stack = getStack(state.board, cell.coord);
           const stackHeight = stack?.pieces.length || 0;
+          const isBeingDragged = dragState && isDragThresholdMetRef.current && hexEqual(cell.coord, dragState.from);
 
           let fillColor = 'transparent';
           let strokeColor = 'hsl(var(--border))';
@@ -204,8 +280,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
               ? 'hsl(var(--honey-dark))'
               : 'hsl(var(--bark))';
             strokeWidth = 2;
-            opacity = 1;
-            cursorClass = top.color === localColor ? 'cursor-pointer' : '';
+            opacity = isBeingDragged ? 0.3 : 1;
+            cursorClass = top.color === localColor ? 'cursor-grab' : '';
           }
 
           if (cell.isSelected) {
@@ -231,14 +307,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
           const isClickable = cell.isValidTarget || cell.isValidPlacement ||
             (cell.isOccupied && top?.color === localColor && state.currentTurn === localColor);
+          const isDraggable = cell.isOccupied && top?.color === localColor && state.currentTurn === localColor;
 
           return (
             <g
               key={hexKey(cell.coord)}
               transform={`translate(${px}, ${py})`}
-              onClick={() => isClickable && onCellClick(cell.coord)}
+              onClick={() => !dragState && isClickable && onCellClick(cell.coord)}
+              onMouseDown={isDraggable ? (e) => handlePieceMouseDown(e, cell.coord) : undefined}
               className={cursorClass}
-              style={{ cursor: isClickable ? 'pointer' : undefined }}
+              style={{ cursor: isDraggable ? 'grab' : isClickable ? 'pointer' : undefined }}
             >
               <polygon
                 points={hexPoints}
@@ -248,9 +326,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
                 opacity={opacity}
                 className="transition-all duration-150"
               />
-              {cell.isOccupied && top && (
+              {cell.isOccupied && top && !isBeingDragged && (
                 <>
-                  {/* Stack indicator */}
                   {stackHeight > 1 && (
                     <text
                       x={HEX_SIZE * 0.55}
@@ -263,7 +340,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
                       {stackHeight}
                     </text>
                   )}
-                  {/* Piece emoji */}
                   <text
                     x={0}
                     y={4}
@@ -274,7 +350,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
                   >
                     {PIECE_EMOJI[top.type]}
                   </text>
-                  {/* Color indicator dot */}
                   <circle
                     cx={0}
                     cy={HEX_SIZE * 0.6}
@@ -294,6 +369,36 @@ const GameBoard: React.FC<GameBoardProps> = ({
             </g>
           );
         })}
+
+        {/* Drag ghost */}
+        {dragState && isDragThresholdMetRef.current && (
+          <g
+            transform={`translate(${dragState.cursorSvg.x}, ${dragState.cursorSvg.y})`}
+            style={{ pointerEvents: 'none' }}
+            filter="url(#drag-shadow)"
+          >
+            <polygon
+              points={hexPoints}
+              fill={dragState.piece.color === 'white'
+                ? 'hsl(var(--honey-light))'
+                : 'hsl(var(--earth))'}
+              stroke={dragState.piece.color === 'white'
+                ? 'hsl(var(--honey-dark))'
+                : 'hsl(var(--bark))'}
+              strokeWidth={2}
+              opacity={0.85}
+            />
+            <text
+              x={0}
+              y={4}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={HEX_SIZE * 0.7}
+            >
+              {PIECE_EMOJI[dragState.piece.type]}
+            </text>
+          </g>
+        )}
       </svg>
     </div>
   );
