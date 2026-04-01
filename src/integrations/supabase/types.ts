@@ -14,7 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      games: {
+        Row: {
+          black_player: string | null
+          created_at: string
+          game_state: Json | null
+          id: string
+          status: string
+          white_player: string
+        }
+        Insert: {
+          black_player?: string | null
+          created_at?: string
+          game_state?: Json | null
+          id: string
+          status?: string
+          white_player: string
+        }
+        Update: {
+          black_player?: string | null
+          created_at?: string
+          game_state?: Json | null
+          id?: string
+          status?: string
+          white_player?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          created_at: string
+          game_id: string
+          id: string
+          sender: string
+          text: string
+        }
+        Insert: {
+          created_at?: string
+          game_id: string
+          id?: string
+          sender: string
+          text: string
+        }
+        Update: {
+          created_at?: string
+          game_id?: string
+          id?: string
+          sender?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
