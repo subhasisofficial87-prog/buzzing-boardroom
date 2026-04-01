@@ -27,11 +27,21 @@ const GameBoard: React.FC<GameBoardProps> = ({
   validMoves,
   validPlacements,
   onCellClick,
+  onBoardPieceSelect,
+  onDragMove,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const [dragState, setDragState] = useState<{
+    from: HexCoord;
+    cursorSvg: { x: number; y: number };
+    piece: { type: PieceType; color: PlayerColor };
+  } | null>(null);
+  const dragStartScreenRef = useRef({ x: 0, y: 0 });
+  const isDragThresholdMetRef = useRef(false);
 
   // Gather all cells to render: occupied + valid placement/move targets
   const { cells, bounds } = useMemo(() => {
