@@ -75,11 +75,36 @@ const Index: React.FC = () => {
 
         <div className="space-y-2">
           <Button onClick={handleCreate} disabled={creating} className="w-full" size="lg">
-            {creating ? 'Creating...' : '🎮 Create New Game'}
+            {creating ? 'Creating...' : '🌐 Play Online'}
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            Get a link to share with your friend
+            Create a room and share the link with a friend
           </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            onClick={() => {
+              if (!nickname.trim()) { toast.error('Please enter a nickname'); return; }
+              navigate(`/local?mode=local&nickname=${encodeURIComponent(nickname.trim())}`);
+            }}
+            variant="secondary"
+            size="lg"
+            className="w-full"
+          >
+            🎮 Local 2P
+          </Button>
+          <Button
+            onClick={() => {
+              if (!nickname.trim()) { toast.error('Please enter a nickname'); return; }
+              navigate(`/local?mode=ai&nickname=${encodeURIComponent(nickname.trim())}`);
+            }}
+            variant="secondary"
+            size="lg"
+            className="w-full"
+          >
+            🤖 vs AI
+          </Button>
         </div>
 
         <div className="flex items-center gap-3">
