@@ -94,17 +94,25 @@ const Index: React.FC = () => {
           >
             🎮 Local 2P
           </Button>
-          <Button
-            onClick={() => {
-              if (!nickname.trim()) { toast.error('Please enter a nickname'); return; }
-              navigate(`/local?mode=ai&nickname=${encodeURIComponent(nickname.trim())}`);
-            }}
-            variant="secondary"
-            size="lg"
-            className="w-full"
-          >
-            🤖 vs AI
-          </Button>
+          <div className="flex flex-col gap-1">
+            {(['easy', 'medium', 'hard'] as const).map(d => {
+              const labels = { easy: '🟢 Easy', medium: '🟡 Medium', hard: '🔴 Hard' };
+              return (
+                <Button
+                  key={d}
+                  onClick={() => {
+                    if (!nickname.trim()) { toast.error('Please enter a nickname'); return; }
+                    navigate(`/local?mode=ai&difficulty=${d}&nickname=${encodeURIComponent(nickname.trim())}`);
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                >
+                  🤖 {labels[d]}
+                </Button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
